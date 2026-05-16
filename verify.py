@@ -102,6 +102,22 @@ def main():
     assert p == Path("/m/AC-DC Live (feat. Guest).mp3"), p
     # No match in stem -> None (caller emits a warning).
     assert compute_renamed_path(Path("/m/track01.mp3"), "Inspired By", "Inspired By (feat. Bosko)") is None
+    # Fuzzy match: filename was sanitized by a different tool (':' -> '_'
+    # here, ':' -> '-' in our sanitizer). The matched span is kept verbatim
+    # so the original punctuation in the stem is preserved.
+    p = compute_renamed_path(
+        Path("/m/26 - RRNN_ Straight Outta Shibuya.mp3"),
+        "RRNN: Straight Outta Shibuya",
+        "RRNN: Straight Outta Shibuya (feat. 高木完)",
+    )
+    assert p == Path("/m/26 - RRNN_ Straight Outta Shibuya (feat. 高木完).mp3"), p
+    # Fuzzy match works with kanji in the title body too (kanji are word chars).
+    p = compute_renamed_path(
+        Path("/m/01 高木完 Song.mp3"),
+        "高木完: Song",
+        "高木完: Song (feat. Guest)",
+    )
+    assert p == Path("/m/01 高木完 Song (feat. Guest).mp3"), p
     print("[OK  ] compute_renamed_path checks")
 
     # strip_trailing_feat_parenthetical: recover the base title for files
