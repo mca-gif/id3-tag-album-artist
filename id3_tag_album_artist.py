@@ -90,6 +90,15 @@ def compute_renamed_path(filepath, old_title, new_title):
 
     Returns the new Path if the old title (sanitized) is found in the stem,
     otherwise None — we won't guess where to splice in the credit.
+
+    Lookup tries exact, then case-insensitive, then a fuzzy match where any
+    run of punctuation/whitespace (incl. '_') is treated as equivalent.
+    Different tools sanitize unsafe characters differently (e.g. ':' -> '_'
+    vs ':' -> '-'), so the title's punctuation may show up in a different
+    form in the filename. When new_s strictly extends old_s (the common case
+    — we're appending a "(feat. X)" credit), the matched span is kept
+    verbatim and only the new suffix is inserted, so the original stem's
+    punctuation is preserved.
     """
     stem = filepath.stem
     old_s = sanitize_for_path(old_title)
@@ -97,12 +106,27 @@ def compute_renamed_path(filepath, old_title, new_title):
     if not old_s or old_s == new_s:
         return None
 
+    fuzzy = False
     idx = stem.find(old_s)
+    end = idx + len(old_s)
     if idx < 0:
         idx = stem.lower().find(old_s.lower())
-        if idx < 0:
-            return None
-    new_stem = stem[:idx] + new_s + stem[idx + len(old_s):]
+        end = idx + len(old_s)
+    if idx < 0:
+        segments = [seg for seg in re.split(r"[\W_]+", old_s) if seg]
+        if segments:
+            pattern = r"[\W_]+".join(re.escape(s) for s in segments)
+            m = re.search(pattern, stem, re.IGNORECASE)
+            if m:
+                idx, end = m.span()
+                fuzzy = True
+    if idx < 0:
+        return None
+
+    if fuzzy and new_s.startswith(old_s):
+        new_stem = stem[:end] + new_s[len(old_s):] + stem[end:]
+    else:
+        new_stem = stem[:idx] + new_s + stem[end:]
     if new_stem == stem:
         return None
     return filepath.with_name(new_stem + filepath.suffix)
